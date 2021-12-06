@@ -1,0 +1,37 @@
+\documentclass[border=1cm]{standalone}
+\usepackage{xcolor}
+
+\colorlet{MyGreen}{green!80!black}
+\colorlet{MyGreen2}{green!40!black}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric}
+\usetikzlibrary{decorations.markings}
+
+\newcommand{\ijk}{{i, j, k}}
+\renewcommand{\ij}{{i, j}}
+
+\begin{document}
+    \def\L{6cm}
+    \def\Bx{\L/5}
+    \def\By{\L/4}
+    \def\Ox{\L/2}
+    \def\Oy{\L/4}
+    \def\thick{0.25mm}
+    \def\Bl{1cm}
+    \def\Bw{0.5cm}
+    \begin{tikzpicture}[line width=1pt]
+        \begin{scope}[]
+            \draw[fill=MyGreen, opacity=0.3, draw=none] (0,0) rectangle ++(\L,\L/2);
+            \draw[line width=\thick, dashed] (-\L/5,\L/4) -- (6*\L/5,\L/4);
+            \draw[fill=red, draw = none] (\Bx,\By) ellipse (0.25cm and 0.125cm);
+            \draw[line width=\thick, red, -stealth] (\Bx,\By) -- (\Bx+0.85cm,\By) node[at end, anchor=north west] (A)  {$s'$};
+            \draw[line width=\thick, red, -stealth] (\Bx,\By) -- (\Bx,\By+0.85cm) node[at end, anchor=south east] (A)  {$y'$};
+            \draw[line width=\thick, red, -stealth] (\Bx,\By) -- (\Bx+0.5303300858899106cm,\By+0.5303300858899106cm) node[at end, anchor=south west] (A)  {$x'$}; 
+            \draw[line width=\thick, MyGreen2, -stealth] (\Ox,\Oy) -- (\Ox+0.85cm,\Oy) node[at end, anchor=north west] (A)  {$s$};
+            \draw[line width=\thick, MyGreen2, -stealth] (\Ox,\Oy) -- (\Ox,\Oy+0.85cm) node[at end, anchor=south east] (A)  {$y$};
+            \draw[line width=\thick, MyGreen2, -stealth] (\Ox,\Oy) -- (\Ox+0.5303300858899106cm,\Oy+0.5303300858899106cm) node[at end, anchor=south west] (A)  {$x$};             
+        \end{scope}
+    \end{tikzpicture} 
+  
+\end{document}

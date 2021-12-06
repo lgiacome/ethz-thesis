@@ -1,0 +1,28 @@
+\documentclass[border=1cm]{standalone}
+\usepackage{xcolor}
+
+\colorlet{MyGreen}{green!80!black}
+
+\usepackage{tikz}
+
+\newcommand{\ijk}{{i, j, k}}
+\renewcommand{\ij}{{i, j}}
+
+\begin{document}
+    \def\L{2.5cm}
+    \def\thick{0.25mm}
+    \begin{tikzpicture}[line width=1pt]
+        \draw (0.7*\L,2*\L) -- (2*\L,0.7*\L)[line width=\thick, blue];
+        \draw (\L,0) -- (\L,2*\L)[line width=\thick,dashed]
+        node [midway, below left, red] {$\phi_{i,j}$} node [pos=0, below, red] {$\phi_{i,j-1}$} node [pos=1, above, white] {$\phi_{i,j-1}$} node [pos=0.25, right]{$l_y|_{i,j-1}$} node [pos=0.75, right]{$l_y|_{i,j}$};
+        \draw (\L,0) -- (\L,1.7*\L)[line width=1pt] node [pos=1, left, red] {$\phi_{i,j+1}$};
+        \draw (0,\L) -- (2*\L,\L)[line width=\thick,dashed] node [pos=0, left, red] {$\phi_{i-1,j}$} node [pos=0.25, above]{$l_x|_{i-1,j}$} node [pos=0.75, above]{$l_x|_{i,j}$} node [pos=1, right, white] {$\phi_{i,j+1}$};
+        \draw (0,\L) -- (1.7*\L,\L)[line width=1pt] node [pos=1, below, red] {$\phi_{i+1,j}$};
+        \filldraw[color=red, very thick](\L,\L) circle (0.05);
+        \filldraw[color=red, very thick](0,\L) circle (0.05);
+        \filldraw[color=red, very thick](\L,0) circle (0.05);
+        \filldraw[color=red, very thick](1.7*\L,\L) circle (0.05);
+        \filldraw[color=red, very thick](\L,1.7*\L) circle (0.05);
+        \draw[draw=none, fill=blue, opacity=0.2] (0.7*\L, 2*\L) -- (2*\L, 2*\L) -- (2*\L, 0.7*\L) -- cycle;
+    \end{tikzpicture}
+\end{document}

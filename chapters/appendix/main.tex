@@ -1,4 +1,155 @@
-\chapter{Appendix}
-\label{ch:appendix}
+\chapter{The Boosted Frame Solver in PyECLOUD}
+\label{ch:BoostedFrameCode}
+We report the implementation of the boosted frame in PyECLOUD as we explained it in CHAPTER. We implemented a \textsc{space\_charge\_electromagnetic} class which is an extension of the pre-existing \textsc{space\_charge\_class} containing the electrostatic solver. The new class implements the functions \textsc{recompute\_spchg\_emfield} and \textsc{get\_sc\_em\_field}. In the former the sources are scattered from the particles to the meshes nodes and the potentials are computed using the interface to the PyPIC solvers, which is a self-standing package containing the Poisson solver (\href{https://github.com/PyCOMPLETE/PyPIC}{https://github.com/PyCOMPLETE/PyPIC}). In the latter we compute the electromagnetic field from the potentials and we gather it at the position of the macroparticles.\\
+The full PyECLOUD code is publicly available on Github in the repository \href{https://github.com/PyCOMPLETE/PyECLOUD}{https://github.com/PyCOMPLETE/PyECLOUD}.
 
-Here be dragons.
+\begin{lstlisting}[language=Python, basicstyle=\small,]
+import numpy as np
+from .space_charge_class import space_charge
+from scipy.constants import epsilon_0, mu_0
+from scipy.constants import c  as c_light
+
+from . import int_field_for as iff
+import sys
+if sys.version_info.major>2:
+    from io import StringIO
+else:
+    from io import BytesIO as StringIO
+
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from . import rhocompute as rhocom
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib import colors
+from . import int_field_for as iff
+
+na = lambda x: np.array([x])
+
+class space_charge_electromagnetic(space_charge, object):
+
+    def __init__(self, chamb, Dh, gamma, Dt_sc=None, 
+                 sparse_solver='scipy_slu',
+                 f_telescope=None, target_grid=None, 
+                 N_nodes_discard=None, N_min_Dh_main=None,
+                 Dh_U_eV=None,
+            PyPICmode='FiniteDifferences_ShortleyWeller'):
+
+        super(space_charge_electromagnetic, 
+              self).__init__(chamb, Dh, Dt_sc, 
+                             PyPICmode , sparse_solver, 
+                             f_telescope, target_grid, 
+                             N_nodes_discard, 
+                             N_min_Dh_main, Dh_U_eV)
+
+        self.flag_em_tracking = True
+        # Initialize additional states for vector potential
+        # The text trap reduces the amount of output shown 
+        # in the terminal
+        text_trap = StringIO()
+        sys.stdout = text_trap
+        self.state_Ax = self.PyPICobj.get_state_object()
+        self.state_Ay = self.PyPICobj.get_state_object()
+        sys.stdout = sys.__stdout__
+        self.state_Ax_old = None
+        self.state_Ay_old = None
+
+        # Store the relativistic factors of the beam
+        self.gamma = gamma
+        self.beta = np.sqrt(1-1/(gamma*gamma))
+
+    def recompute_spchg_emfield(self, MP_e, 
+                                flag_solve=True,
+                                flag_reset=True):
+        # Update the old states before scattering
+        # The text trap reduces the amount of output shown 
+        # in the terminal
+        text_trap = StringIO()
+        sys.stdout = text_trap
+        self.state_Ax_old = self.state_Ax.get_state_object()
+        self.state_Ay_old = self.state_Ay.get_state_object()
+        sys.stdout = sys.__stdout__
+
+        # Scatter the charge
+        self.PyPICobj.scatter(MP_e.x_mp[0:MP_e.N_mp],
+                              MP_e.y_mp[0:MP_e.N_mp], 
+                              MP_e.nel_mp[0:MP_e.N_mp],
+                              charge=MP_e.charge, 
+                              flag_add=not(flag_reset))
+
+        # Scatter currents
+        inv_c2 = 1/(epsilon_0 * mu_0)
+        Jx_mp = (MP_e.nel_mp[0:MP_e.N_mp] * 
+                 MP_e.vx_mp[0:MP_e.N_mp])
+        self.state_Ax.scatter(MP_e.x_mp[0:MP_e.N_mp], 
+                              MP_e.y_mp[0:MP_e.N_mp],
+                              inv_c2 * Jx_mp[0:MP_e.N_mp],
+                              charge=MP_e.charge, 
+                              flag_add=not(flag_reset))
+
+        Jy_mp = (MP_e.nel_mp[0:MP_e.N_mp] * 
+                 MP_e.vy_mp[0:MP_e.N_mp])
+        self.state_Ay.scatter(MP_e.x_mp[0:MP_e.N_mp], 
+                              MP_e.y_mp[0:MP_e.N_mp],
+                              inv_c2 * Jx_mp[0:MP_e.N_mp],
+                              charge=MP_e.charge, 
+                              flag_add=not(flag_reset))
+
+        # Solve the Poisson problems
+        if flag_solve:
+            self.PyPICobj.solve()
+            self.PyPICobj.solve_states([self.state_Ax, 
+                                        self.state_Ay])
+
+    def get_sc_em_field(self, MP_e):
+        # Compute un-primed potentials (with wrong sign 
+        # becase gather is meant to return E field..)
+        Ax_obj = self.state_Ax
+        Ay_obj = self.state_Ay
+        _, m_dAx_dy = Ax_obj.gather(MP_e.x_mp[0:MP_e.N_mp],
+                                 MP_e.y_mp[0:MP_e.N_mp])
+        m_dAy_dx, _ = Ay_obj.gather(MP_e.x_mp[0:MP_e.N_mp],
+                                 MP_e.y_mp[0:MP_e.N_mp])
+        
+        phi_obj = self.PyPICobj
+        (m_dphi_dx, 
+         m_dphi_dy) = phi_obj.gather(MP_e.x_mp[0:MP_e.N_mp],
+                                     MP_e.y_mp[0:MP_e.N_mp])
+        # Fix signs
+        dAx_dy = -m_dAx_dy
+        dAy_dx = -m_dAy_dx
+
+        Ax_obj_old = self.state_Ax_old
+        Ay_obj_old = self.state_Ay_old
+        # If not first passage compute time derivatives 
+        # of Ax and Ay
+        if (Ax_obj_old != None and 
+            Ay_obj_old != None):
+            dAx_dt = (Ax_obj.gather_phi(MP_e.x_mp[0:MP_e.N_mp],
+                                        MP_e.y_mp[0:MP_e.N_mp]) -
+                      Ax_obj_old.gather_phi(MP_e.x_mp[0:MP_e.N_mp],
+                              MP_e.y_mp[0:MP_e.N_mp]))/self.Dt_sc
+            dAy_dt = (Ay_obj.gather_phi(MP_e.x_mp[0:MP_e.N_mp],
+                                        MP_e.y_mp[0:MP_e.N_mp]) -
+                      Ay_obj_old.gather_phi(MP_e.x_mp[0:MP_e.N_mp],
+                              MP_e.y_mp[0:MP_e.N_mp]))/self.Dt_sc
+
+        # If first passage set derivatives to zero
+        else:
+            dAx_dt = np.zeros(MP_e.N_mp)
+            dAy_dt = np.zeros(MP_e.N_mp)
+
+        # Compute E-field in lab frame (E = -grad phi - dA/dt)
+        Ex_sc_n = m_dphi_dx - dAx_dt
+        Ey_sc_n = m_dphi_dy - dAy_dt
+
+        # Compute B-field in lab frame (B = curl A)
+        Bx_sc_n = 1/(self.beta*c_light)*dAy_dt
+        By_sc_n = -1/(self.beta*c_light)*dAx_dt
+        Bz_sc_n = dAy_dx - dAx_dy
+
+        return Ex_sc_n, Ey_sc_n, Bx_sc_n, By_sc_n, Bz_sc_n
+
+\end{lstlisting}
+
+All the studies from the first chapter are stored in the repository TODO.
+
